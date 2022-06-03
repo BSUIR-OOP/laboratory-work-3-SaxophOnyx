@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Collections;
 
 namespace SerializationLab
 {
@@ -106,21 +107,14 @@ namespace SerializationLab
 
         string ISerializer.Serialize(object obj)
         {
-            if (obj is ICollectionSerializable)
-                return SerializeCollection((obj as ICollectionSerializable), 0).ToString();
+            if (obj is IList)
+                return SerializeList((obj as IList), 0).ToString();
             else
                 return SerializeObject(obj, 0).ToString();
         }
 
         private StringBuilder SerializeObject(object obj, int offset)
         {
-            if (obj is ICustomSerializable)
-            {
-                StringBuilder tmp = (obj as ICustomSerializable).Serialize();
-                AppendOffset(tmp, string.Join("", Enumerable.Repeat(Offset, offset)));
-                return tmp;
-            }
-
             StringBuilder res = new StringBuilder();
             string offsetStr = string.Join("", Enumerable.Repeat(Offset, offset));
             string innerOffsetStr = string.Concat(offsetStr, Offset);
@@ -141,10 +135,10 @@ namespace SerializationLab
                 res.AppendFormat("\"{0}\" : ", item.Name);
 
                 Type type = item.PropertyType;
-                if (item.GetValue(obj) is ICollectionSerializable)
+                if (item.GetValue(obj) is IList)
                 {
                     res.Append("\n");
-                    res.Append(SerializeCollection(item.GetValue(obj) as ICollectionSerializable, offset + 1));
+                    res.Append(SerializeList(item.GetValue(obj) as IList, offset + 1));
                     res.Append(",\n");
                 }
                 else if ((!type.IsPrimitive) && (type != typeof(string)))
@@ -167,7 +161,7 @@ namespace SerializationLab
             return res;
         }
 
-        private StringBuilder SerializeCollection(ICollectionSerializable obj, int offset)
+        private StringBuilder SerializeList(IList obj, int offset)
         {
             StringBuilder res = new StringBuilder();
             string offsetStr = string.Join("", Enumerable.Repeat(Offset, offset));
@@ -181,17 +175,17 @@ namespace SerializationLab
             res.Append(typeRecord);
             res.Append(',');
 
-            foreach (var item in obj.GetObjects())
+            foreach (var item in obj)
             {
                 res.Append("\n");
                 res.Append(innerOffsetStr);
 
-                Type type = (obj as ICollectionSerializable).GetType().GenericTypeArguments[0];
+                Type type = (obj as IList).GetType().GenericTypeArguments[0];
 
-                if (item is ICollectionSerializable)
+                if (item is IList)
                 {
                     res.Append("\n");
-                    res.Append(SerializeCollection(item as ICollectionSerializable, offset + 1));
+                    res.Append(SerializeList(item as IList, offset + 1));
                     res.Append(",\n");
                 }
                 else if ((!type.IsPrimitive) && (type != typeof(string)))
@@ -217,7 +211,7 @@ namespace SerializationLab
         object ISerializer.Deserialize(string str, Type type)
         {
             int pos = 0;
-            if (type.GetInterface(nameof(ICollectionSerializable)) != null)
+            if (type.GetInterface(nameof(IList)) != null)
                 return DeserializeArray(str, ref pos);
             else
                 return DeserializeObject(str, ref pos);
@@ -226,9 +220,6 @@ namespace SerializationLab
         private object DeserializeObject(string str, ref int pos)
         {
             Type newType = ParseTypeRecord(str, ref pos);
-
-            if (newType is ICustomSerializable)
-                return (newType as ICustomSerializable).Deserialize(str);
 
             ConstructorInfo info = newType.GetConstructor(Type.EmptyTypes);
             var res = info.Invoke(new object[0]);
@@ -298,9 +289,9 @@ namespace SerializationLab
             ConstructorInfo info = newType.GetConstructor(Type.EmptyTypes);
             var res = info.Invoke(new object[0]);
 
-            if (res is ICollectionSerializable)
+            if (res is IList)
             {
-                List<object> items = new List<object>();
+                //List<object> items = (List<object>)res;
 
                 ArrayParseInfo pInfo = new ArrayParseInfo();
 
@@ -314,8 +305,8 @@ namespace SerializationLab
                             if (pInfo.ItemValue != null)
                             {
                                 //for primitives only
-                                var t = Type.GetTypeCode((res as ICollectionSerializable).GetType().GenericTypeArguments[0]);
-                                items.Add(Convert.ChangeType(pInfo.ItemValue, t));
+                                var t = Type.GetTypeCode((res as IList).GetType().GenericTypeArguments[0]);
+                                (res as IList).Add(Convert.ChangeType(pInfo.ItemValue, t));
                                 pInfo.Clear();
                             }
 
@@ -324,14 +315,13 @@ namespace SerializationLab
 
                         case ']':
                         {
-                            (res as ICollectionSerializable).Deserialize(items);
                             return res;
                         }
 
                         case '{':
                         {
                             object newItem = DeserializeObject(str, ref pos);
-                            items.Add(newItem);
+                            (res as IList).Add(newItem);
                             pInfo.Clear();
 
                             break;
@@ -342,7 +332,7 @@ namespace SerializationLab
                             if (pInfo.ItemValue != null)
                             {
                                 object newItem = DeserializeArray(str, ref pos);
-                                items.Add(newItem);
+                                (res as IList).Add(newItem);
                                 pInfo.Clear();
                             }
 

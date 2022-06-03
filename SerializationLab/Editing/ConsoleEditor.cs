@@ -322,7 +322,7 @@ namespace SerializationLab
                 return;
             }
 
-            Console.Write("Enter JSON file name: ");
+            Console.Write("Enter file name: ");
             string name = Console.ReadLine();
 
             try
@@ -351,7 +351,7 @@ namespace SerializationLab
                 return;
             }
 
-            Console.Write("Enter JSON file name: ");
+            Console.Write("Enter file name: ");
             string name = Console.ReadLine();
             Console.Write("Enter type of the target object");
             string typeName = Console.ReadLine();
